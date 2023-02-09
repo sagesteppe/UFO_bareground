@@ -52,7 +52,8 @@ coords <- read.csv(file.path(praw, f[grep('coordinates', f)]) ) %>%
 
 wghts <- read.csv(file.path(praw, f[grep('Weights', f)]) ) %>% 
   select(Stratum, AoInference = Area, WghtPerPlot) %>% 
-  left_join(coords, wghts, by = c('Stratum', 'AoInference')) 
+  left_join(coords, wghts, by = c('Stratum', 'AoInference'))  %>% 
+  drop_na()
 
 # combine the plot level data to their ESDs benchmarks. 
 benchmarks <- read.csv(file.path(praw, f[grep('ESD.*benchmarks', f)]) ) %>% 
@@ -60,12 +61,16 @@ benchmarks <- read.csv(file.path(praw, f[grep('ESD.*benchmarks', f)]) ) %>%
 
 ecosites <- read.csv(file.path(praw, f[grep('Tracking.*ESD', f)]) ) %>% 
   drop_na(ECO.SITE) %>% 
-  select(-PANEL, STATUS) %>% 
+  select(-PANEL, -STATUS) %>% 
   left_join(., benchmarks, by = 'ECO.SITE')
 
 # import and subset TerrAdat summary data
-summary <- read.csv(file.path(praw, 'TerraDat'))# %>% 
-  #select(PrimaryKey:PlotID, BareSoilCover, Latitude_NAD83:Longitude_NAD83)
+summary <- read.csv(file.path(praw, f[grep('TerraDat', f)]))  %>% 
+  select(PrimaryKey, PlotID, BareSoilCover) %>% 
+  mutate(PlotID = str_replace(PlotID, 'PJW', 'PJ'),
+         PlotID = str_replace(PlotID, 'RIP', 'RI'),
+         PlotID = str_replace(PlotID, 'Other', 'OT')) %>% 
+  left_join(wghts, ., by = c('Plot.ID' = 'PlotID'))
 
 rm(coords, benchmarks)
 ```
@@ -73,9 +78,26 @@ rm(coords, benchmarks)
 
 ```{r join terradat to plot data}
 
-# left_join()
+known_ecosites <- ecosites %>%
+  filter(ECO.SITE.MATCHED == T, ESTIMATE == 'UPPER') %>% 
+  drop_na() %>% 
+  left_join(summary, ., by = c('Plot.ID' = 'PLOT.ID')) %>% 
+  mutate(MEETING = if_else(BareSoilCover <= PERCENT, T, F),
+         .after = BareSoilCover)
+
+table(known_ecosites$MEETING)
 
 ```
+
+The Ecological Site Groups do not contain values for bare ground cover, however they do contain the mean value of 'Total Foliar Cover' for each AIM plot within the concept. In order to generate a realistic estimate of Bare ground for these plots, we simply assume that the cover of Litter, Rock Fragments and Biocrusts are in equilibrium at AIM plots, and add these onto the Foliar estimate
+
+$$ 100 - (\text{ESG total foliar}  + (\text{AIM litter} +  \text{AIM rock} + \text{AIM biocrusts})) = \text{Bareground} $$
+
+
+```{r Create ESG estimates}
+
+```
+
 
 ```{r run cat analysis}
 
@@ -180,7 +202,7 @@ mogrify -trim *.png
 
 # Results
 
-The percent bareground is relatively ... 
+The percent bare ground is relatively ... 
 
 \begin{wrapfigure}{l}{0.5\textwidth}
   \centering
