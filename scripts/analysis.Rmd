@@ -1,0 +1,59 @@
+---
+title: "Bareground"
+output:
+  pdf_document: default
+  word_document: default
+  html_document:
+    df_print: paged
+header-includes:
+- \usepackage[width=\textwidth]{caption}
+- \usepackage{wrapfig}
+always_allow_html: yes
+csl: ../citations/citations/apa.csl
+bibliography: ../citations/citations/citations.bib
+link-citations: yes
+---
+
+\vspace{-1cm}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(dpi = 300) 
+knitr::opts_chunk$set(message = F)
+knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(fig.align="left") 
+```
+
+
+```{r}
+library(tidyverse)
+library(sf)
+```
+
+```{r Import AIM Data}
+praw <- '../data/raw'
+#ppro <-  '../data/processed'
+f <- list.files(praw, pattern = 'csv')
+#files <- list.files(ppro, pattern = 'csv')
+
+benchmarks <- read.csv(file.path(praw, f[grep('ESD.*benchmarks', f)]) ) %>% 
+  pivot_longer(!ECO.SITE, names_to = 'ESTIMATE', values_to = 'PERCENT')
+
+
+# combine the plots with their weights from the sample design
+coords <- read.csv(file.path(praw, f[grep('coordinates', f)]) ) %>% 
+  st_as_sf(coords = c('xcoord', 'ycoord'), crs = 4269) %>% 
+  filter(Plot.Status == 'sampled') %>% 
+  mutate(Stratum = str_remove(str_extract(Plot.ID, '^.*-'), '-'), .before = geometry)
+
+wghts <- read.csv(file.path(praw, f[grep('Weights', f)]) ) %>% 
+  select(Stratum, Area, WghtPerPlot) %>% 
+  left_join(coords, wghts, by = c('Stratum', 'Area' = 'AoInference')) %>% 
+  drop_na()
+
+
+# combine the plot level data to their ESDs benchmarks. 
+
+rm(coords)
+```
+
