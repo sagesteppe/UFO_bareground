@@ -36,24 +36,136 @@ praw <- '../data/raw'
 f <- list.files(praw, pattern = 'csv')
 #files <- list.files(ppro, pattern = 'csv')
 
-benchmarks <- read.csv(file.path(praw, f[grep('ESD.*benchmarks', f)]) ) %>% 
-  pivot_longer(!ECO.SITE, names_to = 'ESTIMATE', values_to = 'PERCENT')
-
 
 # combine the plots with their weights from the sample design
 coords <- read.csv(file.path(praw, f[grep('coordinates', f)]) ) %>% 
   st_as_sf(coords = c('xcoord', 'ycoord'), crs = 4269) %>% 
   filter(Plot.Status == 'sampled') %>% 
+  select(-Panel, -Plot.Status) %>% 
   mutate(Stratum = str_remove(str_extract(Plot.ID, '^.*-'), '-'), .before = geometry)
 
 wghts <- read.csv(file.path(praw, f[grep('Weights', f)]) ) %>% 
-  select(Stratum, Area, WghtPerPlot) %>% 
-  left_join(coords, wghts, by = c('Stratum', 'Area' = 'AoInference')) %>% 
-  drop_na()
-
+  select(Stratum, AoInference = Area, WghtPerPlot) %>% 
+  left_join(coords, wghts, by = c('Stratum', 'AoInference')) 
 
 # combine the plot level data to their ESDs benchmarks. 
+benchmarks <- read.csv(file.path(praw, f[grep('ESD.*benchmarks', f)]) ) %>% 
+  pivot_longer(!ECO.SITE, names_to = 'ESTIMATE', values_to = 'PERCENT')
 
-rm(coords)
+ecosites <- read.csv(file.path(praw, f[grep('Tracking.*ESD', f)]) ) %>% 
+  drop_na(ECO.SITE) %>% 
+  select(-PANEL, STATUS) %>% 
+  left_join(., benchmarks, by = 'ECO.SITE')
+
+# import and subset TerrAdat summary data
+summary <- read.csv(file.path(praw, 'TerraDat'))# %>% 
+  #select(PrimaryKey:PlotID, BareSoilCover, Latitude_NAD83:Longitude_NAD83)
+
+rm(coords, benchmarks)
 ```
+
+
+```{r join terradat to plot data}
+
+left_join()
+
+```
+
+```{r run cat analysis}
+
+shrub <- spsurvey::cat_analysis(
+  dframe = bareground, siteID = 'PLOTID', vars = 'Meeting',
+  subpops = 'AoInference',  weight = 'WghtPerPlot', vartype = 'Local', conf = 80)
+
+
+```
+
+```{r create figure of cover by ESD}
+
+benchmarks %>% 
+  ggplot() +
+  
+  geom_jitter(data = all_hits_shrub, height = 0.2,
+              aes(x = Cover_HB, y = fct_reorder(ECO.SITE, MEAN)), alpha = 0.4) +
+  geom_point(aes(x = COVER, y = fct_reorder(ECO.SITE, MEAN), color  = SET), 
+            shape = 18, alpha = 0.8, size = 3) + #benchmarks here
+  theme_bw() + # AIM data are here
+  
+  scale_color_manual('Benchmark', 
+                     values = c("ESD" = '#D4D7DE', "ESG" = "#f9f871")) +
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid.major.y =  element_blank(),
+        axis.text.y = element_text(size = 7, angle = 45), 
+        aspect.ratio = 16/9,
+        legend.position = 'bottom') +
+  labs(title = 'Bareground Cover',
+       y = NULL, x = 'Percent') +
+  scale_x_continuous(NULL, breaks = seq(from = 0, to = 60, by = 10), 
+                     labels = paste0(seq(from = 0, to = 60, by = 10), '%'), 
+                     limits = c(0,60))
+ggsave(plot = last_plot(), device = 'png', height = 21, units = 'cm', 
+       path = '../results/benchmarks', filename = 'bareground_benchmarks.png')
+
+```
+
+```{r figure of cover by administrative area}
+
+noxious_presence_analysis <- noxious_presence_analysis %>% 
+  mutate(Method = 'SR_Presence')
+waff_dat <- noxious_cover_analysis %>% 
+  mutate(Method = 'LPI_Presence') %>% 
+  bind_rows(noxious_presence_analysis, .) %>% 
+  filter(Category == T) 
+waff_dat <- waff_dat %>% 
+  mutate(
+    across(where(is.numeric), ~ round(.x, 0)),
+    Low = if_else(LCB80Pct.P == 0, 0, LCB80Pct.P - 1),
+    CI_Low = Estimate.P - LCB80Pct.P,
+    Estimate = 1,
+    CI_High = UCB80Pct.P - Estimate.P,
+    High = if_else(UCB80Pct.P == 0, 100, 100 - UCB80Pct.P)
+  ) %>% 
+  rowwise(Subpopulation) %>% 
+  mutate(High = if_else(sum(c_across(Low:High)) > 100, High -1, High),
+         High = if_else(sum(c_across(Low:High)) < 100, High + 1, High))  %>% 
+  select(Subpopulation, Method,  Low:High) %>% 
+  pivot_longer(cols = Low:High, names_to = 'Statistic', values_to = 'Value') %>% 
+  group_by(Subpopulation) %>% 
+  mutate(
+    Method = factor(Method, levels = c('SR_Presence', 'LPI_Presence')),
+    Statistic = factor(Statistic,
+                       levels = c('Low', 'CI_Low', 'Estimate', 'CI_High', 'High')), 
+    Subpopulation = factor(Subpopulation,
+                       levels = c('ACEC-WSA', 'DE-NM', 'GG-NM', 'SampleFrame')))
+waff_dat <- data.table::setorder(waff_dat, Statistic)
+waf_values = c('Low' = '#1FE032', 'High' = '#E0321F', 'CI_Low' = '#808929', 
+               'Estimate' = 'black', 'CI_High' = '#808929')
+meth_labs = setNames(c("Richness", "LPI"), c('SR_Presence', "LPI_Presence"))
+w <- ggplot(waff_dat, aes(fill = Statistic, values = Value)) +
+  geom_waffle(color = "white", size = .25, flip = TRUE) +
+  facet_wrap( ~ Subpopulation, 
+             labeller = labeller(Method = meth_labs)) +
+  scale_fill_manual('Condition', values = waf_values, 
+                    labels = c('Meeting', 'Conf. Int.', "Estimate", 'Conf. Int.', 'Failing')) +
+  scale_x_discrete()  +
+  scale_y_continuous('Percent Land', labels = function(x)round(x * 10, -1), expand = c(0,0))  +
+  
+  theme(
+    legend.position="bottom", legend.direction="vertical",
+    aspect.ratio = 1,
+    axis.text.y = element_text(color = "grey20", size = 6, angle = 45),
+    axis.title.y = element_text(size = 9),
+    legend.key.size = unit(0.3, 'lines'),
+    legend.text = element_text(size = 6),
+    legend.title = element_text(hjust = 0.5, size = 8), 
+    plot.title = element_text(hjust = 0.5, size = 10, face = 'bold'),
+    panel.spacing = unit(0.4, "lines"), 
+    strip.background =element_rect(fill="white"), 
+    panel.background = element_blank()) +
+  guides(fill=guide_legend(ncol=2))
+ggsave(w, path = '../results/figures', device = 'png', bg = 'transparent',
+       filename = 'waffles.png', dpi = 300, height = 4, units = "in")
+```
+
+
 
