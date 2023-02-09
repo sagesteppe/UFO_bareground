@@ -16,6 +16,8 @@ link-citations: yes
 
 \vspace{-1cm}
 
+A decrease in the total amount of vegetation, the litter associated with dead portions which fall away from it, and soil crusts, leads to an increase in bare ground. Bare ground, constitutes the top layer of all soil which may be exposed to a falling raindrop, and in addition to vegetation does not include rock and gravel. Increases in bare ground increase the susceptibility of soil to erosion, a process which adversely impacts both natural and human modified areas (SECTION X.X). While invasive species tend to drastically alter the biotic context of ecological sites (SECTION X.X), and different plant functional groups (SECTION X.X.) have differing effects on decreasing the potential of soil to erosion (SECTION X.X), the alteration of functional groups and shifting of an ecological site to cover  of noxious species is not a zero sum game for soil retention. Accordingly, here we determine whether an appropriate amount of vegetation, and biocrusts, remain on sites to prevent an increase in the risk of sites to erodibility. 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = F)
 knitr::opts_chunk$set(dpi = 300) 
@@ -24,10 +26,14 @@ knitr::opts_chunk$set(warning = F)
 knitr::opts_chunk$set(fig.align="left") 
 ```
 
+# Methods
+
+TerrAdat summary data were downloaded from the ArcMap SDE (Spatial Database Engine) service layer on February 9th 2023, and imported into R. The references for bare ground cover come exclusively from the 'Reference Sheet' portion as Ecological Site Descriptions as these values were noted to differ from vegetation estimates in a few of the functional cover estimates. These estimates were available for XX of all the XX sites which had plots verified to them,  XX of XX  total plots had a reference benchmark.  
 
 ```{r}
 library(tidyverse)
 library(sf)
+library(spsurvey)
 ```
 
 ```{r Import AIM Data}
@@ -67,7 +73,7 @@ rm(coords, benchmarks)
 
 ```{r join terradat to plot data}
 
-left_join()
+# left_join()
 
 ```
 
@@ -76,7 +82,6 @@ left_join()
 shrub <- spsurvey::cat_analysis(
   dframe = bareground, siteID = 'PLOTID', vars = 'Meeting',
   subpops = 'AoInference',  weight = 'WghtPerPlot', vartype = 'Local', conf = 80)
-
 
 ```
 
@@ -98,13 +103,13 @@ benchmarks %>%
         axis.text.y = element_text(size = 7, angle = 45), 
         aspect.ratio = 16/9,
         legend.position = 'bottom') +
-  labs(title = 'Bareground Cover',
+  labs(title = 'Bareground',
        y = NULL, x = 'Percent') +
   scale_x_continuous(NULL, breaks = seq(from = 0, to = 60, by = 10), 
                      labels = paste0(seq(from = 0, to = 60, by = 10), '%'), 
                      limits = c(0,60))
 ggsave(plot = last_plot(), device = 'png', height = 21, units = 'cm', 
-       path = '../results/benchmarks', filename = 'bareground_benchmarks.png')
+       path = '../results', filename = 'bareground_benchmarks.png')
 
 ```
 
@@ -168,4 +173,19 @@ ggsave(w, path = '../results/figures', device = 'png', bg = 'transparent',
 ```
 
 
+```{sh, crop the images, eval = F}
+cd ../results/benchmarks
+mogrify -trim *.png
+```
 
+# Results
+
+The percent bareground is relatively ... 
+
+\begin{wrapfigure}{l}{0.5\textwidth}
+  \centering
+    \includegraphics[width=0.5\textwidth]{../results/bareground_benchmark.png}
+  \caption{Benchmarks and Observed Values}
+\end{wrapfigure}
+
+# References
