@@ -50,12 +50,13 @@ coords <- read.csv(file.path(praw, f[grep('coordinates', f)]) ) %>%
   select(-Panel, -Plot.Status) %>% 
   mutate(Stratum = str_remove(str_extract(Plot.ID, '^.*-'), '-'), 
          .before = geometry) %>% 
-  rename(PLOTID = Plot.ID)
+  rename(PLOTID = Plot.ID) %>% 
+  mutate(PLOTID = str_trim(PLOTID)) 
 
 wghts <- read.csv(file.path(praw, f[grep('Weights', f)]) ) %>% 
   select(Stratum, AoInference = Area, WghtPerPlot) %>% 
-  left_join(coords, wghts, by = c('Stratum', 'AoInference'))  %>% 
-  drop_na()
+  left_join(coords, wghts, by = c('Stratum', 'AoInference')) # %>% 
+  #drop_na()
 
 # combine the plot level data to their ESDs benchmarks. 
 benchmarks <- read.csv(file.path(praw, f[grep('ESD.*benchmarks', f)]) ) %>% 
@@ -76,14 +77,14 @@ summary <- read.csv(file.path(praw, f[grep('TerraDat', f)])) %>%
   left_join(wghts, ., by = 'PLOTID') 
   
 
-rm(coords, benchmarks)
+rm(coords, benchmarks, wghts)
 ```
 
 
 ```{r join terradat to plot data}
 
 known_ecosites <- ecosites %>%
-  filter(ECO.SITE.MATCHED == T, ESTIMATE == 'UPPER') %>% 
+  filter(ECO.SITE.MATCHED == T, ESTIMATE == 'UPPER') #%>% 
   drop_na() %>% 
   rename(PLOTID = PLOT.ID) %>% 
   left_join(summary, ., by = 'PLOTID') %>% 
@@ -102,7 +103,12 @@ $$ 100 - (\text{ESG total foliar}  + (\text{AIM litter} +  \text{AIM rock} + \te
 
 esg_unverified_plots <- read.csv(file.path(praw, f[grep('ESG_unverified', f)])) %>% 
   mutate(ESG = str_replace(ESG, '_-_', '-')) %>% 
-  rename(PLOTID = 'PLOT.ID')
+  rename(PLOTID = 'PLOT.ID') %>% 
+  mutate(ESG = str_replace(ESG, 'SAC-Loamy_Uplands', 'SAC-Finer_Uplands'),
+         ESG = str_replace(ESG, 'SAW-Outcrops', 'Outcrops'), 
+         ESG = str_replace(ESG, 'SAW-Bottoms', 'SAW-Saline_Bottoms'), 
+         ESG = str_replace(ESG, 'SAW-Shallow$', 'SAW-Shallow_and_Deep_Rocky'),
+         ESG = str_replace(ESG, 'AW-Loamy_Uplands', 'AW-Sandy_and_Loamy_Uplands'))
 
 lkp_abb <- data.frame(
   Climate =
@@ -111,7 +117,7 @@ lkp_abb <- data.frame(
 )
 
 esg_cover <- read.csv(file.path(praw, f[grep('SiteGroup', f)])) %>% 
-  select(Climate, SoilGeomorphicUnits, Total_Foliar) %>% 
+  select(Climate, SoilGeomorphicUnits, PERCENT = Total_Foliar) %>% 
   left_join(., lkp_abb) %>% 
   unite('ESG', c('Abbrev', 'SoilGeomorphicUnits'), sep = '-') %>% 
   select(-Climate) %>% 
@@ -121,19 +127,43 @@ esg_cover <- read.csv(file.path(praw, f[grep('SiteGroup', f)])) %>%
                            'SAC-Finer_Uplands')
          ) 
 
-left_join(esg_unverified_plots, esg_cover) %>% 
-  
+esg_bm <- left_join(esg_unverified_plots, esg_cover, by = 'ESG') %>% 
+  rename(ECO.SITE = ESG)
 
+esg_bm <- ecosites %>% 
+  filter(ECO.SITE.MATCHED == F) %>% 
+  select(-PERCENT, -ECO.SITE, PLOTID = PLOT.ID) %>% 
+  mutate(ESTIMATE = 'LOWER') %>% 
+  full_join(., esg_bm, by = 'PLOTID')
 
-rm(lkp_abb)
+rm(lkp_abb, esg_unverified_plots, esg_cover)
 ```
+
+```{r reassemble both metrics}
+
+esd <- known_ecosites %>% drop_na()
+
+
+ecosites %>% filter(ECO.SITE.MATCHED == F)
+
+esg <- esg_bm %>% 
+  left_join(., summary, by = 'PLOTID') %>% 
+  mutate(Meeting = if_else(BareSoilCover <= PERCENT, T, F),
+         .after = BareSoilCover) %>% 
+  st_as_sf()
+
+where_r_they <- summary %>% 
+  filter(!PLOTID %in% c( esd$PLOTID, esg$PLOTID ) )
+
+```
+
 
 
 
 ```{r run cat analysis}
 
-shrub <- spsurvey::cat_analysis(
-  dframe = known_ecosites, siteID = 'Plot.ID', vars = 'Meeting',
+bareground <- spsurvey::cat_analysis(
+  dframe = known_ecosites, siteID = 'PLOTID', vars = 'Meeting',
   subpops = 'AoInference',  weight = 'WghtPerPlot', vartype = 'Local', conf = 80)
 
 ```
