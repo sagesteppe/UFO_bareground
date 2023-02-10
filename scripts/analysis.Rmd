@@ -48,7 +48,9 @@ coords <- read.csv(file.path(praw, f[grep('coordinates', f)]) ) %>%
   st_as_sf(coords = c('xcoord', 'ycoord'), crs = 4269) %>% 
   filter(Plot.Status == 'sampled') %>% 
   select(-Panel, -Plot.Status) %>% 
-  mutate(Stratum = str_remove(str_extract(Plot.ID, '^.*-'), '-'), .before = geometry)
+  mutate(Stratum = str_remove(str_extract(Plot.ID, '^.*-'), '-'), 
+         .before = geometry) %>% 
+  rename(PLOTID = Plot.ID)
 
 wghts <- read.csv(file.path(praw, f[grep('Weights', f)]) ) %>% 
   select(Stratum, AoInference = Area, WghtPerPlot) %>% 
@@ -65,12 +67,14 @@ ecosites <- read.csv(file.path(praw, f[grep('Tracking.*ESD', f)]) ) %>%
   left_join(., benchmarks, by = 'ECO.SITE')
 
 # import and subset TerrAdat summary data
-summary <- read.csv(file.path(praw, f[grep('TerraDat', f)]))  %>% 
-  select(PrimaryKey, PlotID, BareSoilCover) %>% 
+summary <- read.csv(file.path(praw, f[grep('TerraDat', f)])) %>% 
+  select(PrimaryKey, PlotID, BareSoilCover, TotalFoliarCover, ) %>% 
   mutate(PlotID = str_replace(PlotID, 'PJW', 'PJ'),
          PlotID = str_replace(PlotID, 'RIP', 'RI'),
          PlotID = str_replace(PlotID, 'Other', 'OT')) %>% 
-  left_join(wghts, ., by = c('Plot.ID' = 'PlotID'))
+  rename(PLOTID = PlotID) %>% 
+  left_join(wghts, ., by = 'PLOTID') 
+  
 
 rm(coords, benchmarks)
 ```
@@ -81,28 +85,55 @@ rm(coords, benchmarks)
 known_ecosites <- ecosites %>%
   filter(ECO.SITE.MATCHED == T, ESTIMATE == 'UPPER') %>% 
   drop_na() %>% 
-  left_join(summary, ., by = c('Plot.ID' = 'PLOT.ID')) %>% 
-  mutate(MEETING = if_else(BareSoilCover <= PERCENT, T, F),
-         .after = BareSoilCover)
+  rename(PLOTID = PLOT.ID) %>% 
+  left_join(summary, ., by = 'PLOTID') %>% 
+  mutate(Meeting = if_else(BareSoilCover <= PERCENT, T, F),
+         .after = BareSoilCover) %>% 
+  st_as_sf()
 
-table(known_ecosites$MEETING)
-
+table(known_ecosites$Meeting)
 ```
 
-The Ecological Site Groups do not contain values for bare ground cover, however they do contain the mean value of 'Total Foliar Cover' for each AIM plot within the concept. In order to generate a realistic estimate of Bare ground for these plots, we simply assume that the cover of Litter, Rock Fragments and Biocrusts are in equilibrium at AIM plots, and add these onto the Foliar estimate
+The Ecological Site Groups do not contain values for bare ground cover, however they do contain the mean value of 'Total Foliar Cover' for each AIM plot within the concept. In order to generate a realistic estimate of Bare ground for these plots, we simply assume that the cover of Litter, Rock Fragments and Biocrusts are in equilibrium at AIM plots. In making this assumption, we may simple compare the estimates of total foliar cover, from the TerrAdat dataset to the estimates of total cover from the Ecological Site Groups. 
 
-$$ 100 - (\text{ESG total foliar}  + (\text{AIM litter} +  \text{AIM rock} + \text{AIM biocrusts})) = \text{Bareground} $$
+$$ 100 - (\text{ESG total foliar}  + (\text{AIM litter} +  \text{AIM rock} + \text{AIM biocrusts})) = \text{Bare ground} $$
+
+```{r Compare Total Foliar Estimatess}
+
+esg_unverified_plots <- read.csv(file.path(praw, f[grep('ESG_unverified', f)])) %>% 
+  mutate(ESG = str_replace(ESG, '_-_', '-')) %>% 
+  rename(PLOTID = 'PLOT.ID')
+
+lkp_abb <- data.frame(
+  Climate =
+    c('Arid_Warm', 'Semiarid_Cool',  'Semiarid_warm', 'No_Climate_Group'),
+  Abbrev = c('AW', 'SAC', 'SAW', "")
+)
+
+esg_cover <- read.csv(file.path(praw, f[grep('SiteGroup', f)])) %>% 
+  select(Climate, SoilGeomorphicUnits, Total_Foliar) %>% 
+  left_join(., lkp_abb) %>% 
+  unite('ESG', c('Abbrev', 'SoilGeomorphicUnits'), sep = '-') %>% 
+  select(-Climate) %>% 
+  mutate(ESG = str_remove(ESG, '^-'), 
+         ESG = str_replace(ESG, 'AW-Sandy_Bottoms', 'AW-Bottoms'),
+         ESG = str_replace(ESG, 'SAC-Saline_Sandy_Loamy_Finer_Uplands', 
+                           'SAC-Finer_Uplands')
+         ) 
+
+left_join(esg_unverified_plots, esg_cover) %>% 
+  
 
 
-```{r Create ESG estimates}
-
+rm(lkp_abb)
 ```
+
 
 
 ```{r run cat analysis}
 
 shrub <- spsurvey::cat_analysis(
-  dframe = bareground, siteID = 'PLOTID', vars = 'Meeting',
+  dframe = known_ecosites, siteID = 'Plot.ID', vars = 'Meeting',
   subpops = 'AoInference',  weight = 'WghtPerPlot', vartype = 'Local', conf = 80)
 
 ```
