@@ -103,12 +103,8 @@ known_ecosites <- ecosites %>%
          .after = BareSoilCover) %>% 
   st_as_sf()
 
-table(known_ecosites$Meeting)
 ```
 
-The Ecological Site Groups do not contain values for bare ground cover, however they do contain the mean value of 'Total Foliar Cover' for each AIM plot within the concept. In order to generate a realistic estimate of Bare ground for these plots, we simply assume that the cover of Litter, Rock Fragments and Biocrusts are in equilibrium at AIM plots. In making this assumption, we may simple compare the estimates of total foliar cover, from the TerrAdat dataset to the estimates of total cover from the Ecological Site Groups. 
-
-$$ 100 - (\text{ESG total foliar}  + (\text{AIM litter} +  \text{AIM rock} + \text{AIM biocrusts})) = \text{Bare ground} $$
 
 ```{r Compare Total Foliar Estimatess}
 
@@ -164,15 +160,25 @@ es_wo_d <- ecosites %>%
          .after = BareSoilCover) %>% 
   select(-ESG)
 
-table(es_wo_d$Meeting)
 
 # 27 % failing, relative to 53 % above - HOWEVER, these are largely our higher elevation MLRA 48
 # sites, so i believe that this is reasonable result. 
 
 ```
 
+```{r reassemble all plots now with metrics}
 
-We compared the results from three different calculations of benchmarks. The first values utilizing the benchmarks from the Ecological Site Descriptions, resulted in a Field Office wide `r prop_fail(known_ecosites)`, while for plots with matched Ecological Sites, but which lacked a written Description `r prop_fail(es_wo_d)`, and plots which were not mapped to an Ecological Site `r prop_fail(esg)`. Taken together all plots compared with esgs had `r prop_fail(esg_bm2)`
+esd <- known_ecosites %>% drop_na()
+
+esg <- esg_bm %>% 
+  left_join(., summary, by = 'PLOTID') %>% 
+  mutate(Meeting = if_else(TotalFoliarCover >= PERCENT, T, F),
+         .after = BareSoilCover) %>% 
+  st_as_sf()
+
+esg_bm <- bind_rows(es_wo_d, esg)
+
+```
 
 
 ```{r Does Total Foliar Cover Predict Bare Soil ?}
@@ -211,46 +217,84 @@ rm(predicted_vals, bg_pred_tfc)
 ```
 
 
-```{r reassemble all plots now with metrics}
 
-esd <- known_ecosites %>% drop_na()
 
-esg <- esg_bm %>% 
-  left_join(., summary, by = 'PLOTID') %>% 
-  mutate(Meeting = if_else(TotalFoliarCover >= PERCENT, T, F),
-         .after = BareSoilCover) %>% 
-  st_as_sf()
+The Ecological Site Groups do not contain values for bare ground cover, however they do contain the mean value of 'Total Foliar Cover' for each AIM plot within the concept. In order to generate a realistic estimate of Bare ground for these plots, we assume that a relationship exists between the total foliar cover at a plot, and the proportion of bare ground. While the true relationship is expressed in the equation below:
 
-esg_bm2 <- bind_rows(es_wo_d, esg)
+$$ 100 - (\text{foliar cover} + \text{litter} +  \text{rock} + \text{biocrusts})) = \text{bare ground} $$
+We sought to generalize this relationship to:
 
-```
+$$ 100 -  \text{foliar cover} = \text{bare ground} $$
+In order to accomplish this a very simple linear model was created, using the `r ` AIM plots which had both verified Ecological Sites, and which these contained descriptions with cover reference. The linear model used the TerrAdat metric 'TotalFoliarCover' as a predictor of 'BareSoilCover' $\text{lm(BareSoilCover ~ TotalFoliarCover)}$ (in R modelling parlance), *STATS.* The values predicted from this model, for estimates of Total Foliar Cover from 0-100 were then rounded up to the nearest 5, e.g. an estimate of 1% bare ground would be 5%, to reflect variation in reference states, and that a linear model seeks to pass through the central *MOTION* of a cloud of data points.  
+
+We compared the results from three different calculations of benchmarks. The first values utilizing the benchmarks from the Ecological Site Descriptions, resulted in a Field Office wide `r prop_fail(known_ecosites)`, while for plots with matched Ecological Sites, but which lacked a written Description `r prop_fail(es_wo_d)`, and plots which were not mapped to an Ecological Site `r prop_fail(esg)`. Taken together all plots compared with esgs had `r prop_fail(esg_bm2)`
 
 
 ```{r compare imputed benchmarks to raw benchmarks}
 
 newdat <- newdat %>%
-  select(TotalFoliarCover, BareSoilCover) %>% 
-  mutate(BareSoilCover = if_else(BareSoilCover < 5, 5, BareSoilCover)) %>% 
-  rename(Imputed_Target = BareSoilCover) %>% 
-  mutate(Imputed_Target = mround(Imputed_Target, base= 5))
+  select(TotalFoliarCover, BareSoilCover) %>%
+  mutate(
+    Imputed_Target_LM = if_else(BareSoilCover < 5, 5, BareSoilCover),
+    Imputed_Target_5 = if_else(BareSoilCover < 5, 5, BareSoilCover),
+    Imputed_Target_10 = if_else(BareSoilCover < 10, 10, BareSoilCover),
+    Imputed_Target_5 = mround(Imputed_Target_5, base = 5),
+    Imputed_Target_10 = mround(Imputed_Target_10, base = 10)
+  ) %>% 
+  select(-BareSoilCover)
 
-t <- esg_bm2 %>% 
+# round up values to the nearest 5, we have 2-3 which are missed by just a few tenths
+# of a percent, and we could catch them here, but realistically these should
+# convey the heterogeneity of a system better. 
+
+esg_bm <- drop_na(esg_bm)
+
+compare_imputed <- esg_bm %>% 
+  select(TotalFoliarCover, BareSoilCover, PERCENT) %>% 
   mutate(TotalFoliarCover = round(TotalFoliarCover, 0)) %>% 
   left_join(., newdat, by = 'TotalFoliarCover') %>% 
-  mutate(Meeting2 = if_else(BareSoilCover <= Imputed_Target, T, F),
-         .after = BareSoilCover) 
+  mutate(
+    Meeting_TF = if_else(TotalFoliarCover <= PERCENT, T, F), 
+    Meeting_IT = if_else(BareSoilCover <= Imputed_Target_LM, T, F), 
+    Meeting_IT_5 = if_else(BareSoilCover <= Imputed_Target_5, T, F), 
+    Meeting_IT_10 = if_else(BareSoilCover <= Imputed_Target_10, T, F)
+    ) %>% 
+  select(starts_with('Meeting')) %>% 
+  summarize(across(.cols = everything(), sum, na.rm = T)) %>% 
+  mutate(across(.cols = everything(), ~ 1 - (.x/nrow(esg_bm))))
+
+
+ref <- known_ecosites %>% 
+  st_drop_geometry() %>% 
+  select(Meeting_ESD = Meeting) %>% 
+  summarize(across(.cols = everything(), sum, na.rm = T)) %>% 
+   mutate(across(.cols = everything(), ~ 1 - (.x/nrow(known_ecosites))))
   
+cbind(compare_imputed, ref) %>% 
+  t() %>% 
+  data.frame() %>% 
+  rownames_to_column() %>% 
+  rename(condition = 1, Percent = 2) %>% 
+  mutate(Type = case_when(
+    str_detect(condition, 'TF') ~ 'ESG',
+    str_detect(condition, 'ESD') ~ 'ESD',
+    str_detect(condition, 'IT') ~ 'Imputed'
+    )) %>% 
+  ggplot(aes(x = fct_reorder(condition, -Percent), y = Percent, fill = Type)) +
+  geom_col() +
+  theme_bw() +
+  scale_x_discrete(labels=c('Total Foliar', 'LM', 'LM + 5%',
+                            'ESD',  'LM + 10%')) +
+  scale_fill_manual(values = c('#D4CB92', '#395C6B', '#BCD3F2')) +
+  geom_text(aes(label = round(Percent, 3))) + 
 
+  labs(title = 'Comparision of ESG with ESG derived Benchmarks', 
+       x = 'Calculated Value', y = 'Proportion of Plots Meeting Benchmark')
 
-table(t$Meeting)
-table(t$Meeting2)
-
-33/72 # 45.8 fail
-26/72 # 40 # fail
-
-
+prop_fail(known_ecosites)
 ```
 
+We compare four possible benchmark values inferred from the ESG covers. The first was the original value of Total Foliar Cover, using this metric `r sum` plots were classified as failing to meet benchmarks, a serious discrepancy between those plots which had ESD benchmarks to compare themselves to which had only `r sum` plots failling to achieve benchmarks. While comparing them to the aforementioned altered conditions ... 
 
 ```{r}
 
@@ -259,6 +303,30 @@ plots_w_bm <- bind_rows(esd, esg_bm2) %>% st_as_sf() %>%
 
 rm(esd, es_wo_d, esg)
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
