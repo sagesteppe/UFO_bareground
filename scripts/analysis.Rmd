@@ -34,6 +34,16 @@ TerrAdat summary data were downloaded from the ArcMap SDE (Spatial Database Engi
 library(tidyverse)
 library(sf)
 library(spsurvey)
+
+
+
+prop_fail <- function(x){
+  
+  meet <- table(x$Meeting)
+  toString(paste0('proportion of plots not achieving benchmarks: ', round( meet[1] / sum(meet), 3), 
+         ' (n = ',  sum(meet), ')' ))
+}
+
 ```
 
 ```{r Import AIM Data}
@@ -55,8 +65,8 @@ coords <- read.csv(file.path(praw, f[grep('coordinates', f)]) ) %>%
 
 wghts <- read.csv(file.path(praw, f[grep('Weights', f)]) ) %>% 
   select(Stratum, AoInference = Area, WghtPerPlot) %>% 
-  left_join(coords, wghts, by = c('Stratum', 'AoInference')) # %>% 
-  #drop_na()
+  left_join(coords, wghts, by = c('Stratum', 'AoInference'))  %>% 
+  drop_na()
 
 # combine the plot level data to their ESDs benchmarks. 
 benchmarks <- read.csv(file.path(praw, f[grep('ESD.*benchmarks', f)]) ) %>% 
@@ -150,33 +160,69 @@ es_wo_d <- ecosites %>%
   select(-PERCENT) %>%  
   left_join(., esg_lkp_tab) %>% 
   mutate(Meeting = if_else(TotalFoliarCover >= PERCENT, T, F),
-         .after = BareSoilCover)
+         .after = BareSoilCover) %>% 
+  select(-ESG)
 
 table(es_wo_d$Meeting)
 
-
-64/122
-8/22 # 37 % failing, relative to 53 above
-
+# 27 % failing, relative to 53 % above - HOWEVER, these are largely our higher elevation MLRA 48
+# sites, so i believe that this is reasonable result. 
 
 ```
+
+
+We compared the results from three different calculations of benchmarks. The first values utilizing the benchmarks from the Ecological Site Descriptions, resulted in a Field Office wide `r prop_fail(known_ecosites)`, while for plots with matched Ecological Sites, but which lacked a written Description `r prop_fail(es_wo_d)`, and plots which were not mapped to an Ecological Site `r prop_fail(esg)`. Taken together all plots compared with esgs had `r prop_fail(esg_bm2)`
+
+
+```{r Does Total Foliar Cover Predict Bare Soil ?}
+ 
+hist(known_ecosites$BareSoilCover)
+summary(bg_pred_tfc <-  lm(BareSoilCover ~ TotalFoliarCover, data = known_ecosites) )
+     
+par(mfrow  = c(2,2))
+plot(bg_pred_tfc )
+dev.off()
+
+newdat <- data.frame(TotalFoliarCover = 100:0)
+predicted_vals <- predict(bg_pred_tfc, newdat, tyep = 'response', se.fit = T) 
+newdat = data.frame(
+  TotalFoliarCover = 100:0, 
+  BareSoilCover = predicted_vals$fit, 
+  se.low = predicted_vals$fit - predicted_vals$se.fit,
+  se.high = predicted_vals$fit + predicted_vals$se.fit
+)
+
+
+par(pty="s")
+plot( x = known_ecosites$TotalFoliarCover, y = known_ecosites$BareSoilCover,
+     xlab = 'Total Foliar Cover', ylab = 'Bare Soil Cover',  axes = FALSE, 
+     main = 'Predicting Bareground from Foliar Cover',
+     xlim = c(0,100), ylim = c(0,100), col = rgb(red = 0, green = 0, blue = 0, alpha = 0.3))
+lines(x = newdat$TotalFoliarCover, y = newdat$BareSoilCover,  lwd = 2) 
+lines(y = newdat$se.high, x = newdat$TotalFoliarCover,  col = 'red', lwd = 2, lty = 3)
+lines(y = newdat$se.low, x = newdat$TotalFoliarCover,  col = 'red', lwd = 2, lty = 3)
+axis(1)
+axis(2, las = 1)
+
+```
+
 
 ```{r reassemble all plots now with metrics}
 
 esd <- known_ecosites %>% drop_na()
 
-
-ecosites %>% filter(ECO.SITE.MATCHED == F)
-
 esg <- esg_bm %>% 
   left_join(., summary, by = 'PLOTID') %>% 
-  mutate(Meeting = if_else(BareSoilCover <= PERCENT, T, F),
+  mutate(Meeting = if_else(TotalFoliarCover >= PERCENT  - 5, T, F),
          .after = BareSoilCover) %>% 
   st_as_sf()
 
-where_r_they <- summary %>% 
-  filter(!PLOTID %in% c( esd$PLOTID, esg$PLOTID ) )
+esg_bm2 <- bind_rows(es_wo_d, esg)
 
+plots_w_bm <- bind_rows(esd, esg_bm2) %>% st_as_sf() %>% 
+  drop_na()
+
+rm(esd, es_wo_d, esg)
 ```
 
 
@@ -185,7 +231,7 @@ where_r_they <- summary %>%
 ```{r run cat analysis}
 
 bareground <- spsurvey::cat_analysis(
-  dframe = known_ecosites, siteID = 'PLOTID', vars = 'Meeting',
+  dframe = plots_w_bm, siteID = 'PLOTID', vars = 'Meeting',
   subpops = 'AoInference',  weight = 'WghtPerPlot', vartype = 'Local', conf = 80)
 
 ```
