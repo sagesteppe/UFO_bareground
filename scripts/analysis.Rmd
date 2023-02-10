@@ -65,7 +65,8 @@ benchmarks <- read.csv(file.path(praw, f[grep('ESD.*benchmarks', f)]) ) %>%
 ecosites <- read.csv(file.path(praw, f[grep('Tracking.*ESD', f)]) ) %>% 
   drop_na(ECO.SITE) %>% 
   select(-PANEL, -STATUS) %>% 
-  left_join(., benchmarks, by = 'ECO.SITE')
+  left_join(., benchmarks, by = 'ECO.SITE') %>% 
+  rename(PLOTID = PLOT.ID)
 
 # import and subset TerrAdat summary data
 summary <- read.csv(file.path(praw, f[grep('TerraDat', f)])) %>% 
@@ -84,10 +85,9 @@ rm(coords, benchmarks, wghts)
 ```{r join terradat to plot data}
 
 known_ecosites <- ecosites %>%
-  filter(ECO.SITE.MATCHED == T, ESTIMATE == 'UPPER') #%>% 
+  filter(ECO.SITE.MATCHED == T, ESTIMATE == 'UPPER') %>% 
   drop_na() %>% 
-  rename(PLOTID = PLOT.ID) %>% 
-  left_join(summary, ., by = 'PLOTID') %>% 
+  left_join(., summary, by = 'PLOTID') %>% 
   mutate(Meeting = if_else(BareSoilCover <= PERCENT, T, F),
          .after = BareSoilCover) %>% 
   st_as_sf()
@@ -132,14 +132,36 @@ esg_bm <- left_join(esg_unverified_plots, esg_cover, by = 'ESG') %>%
 
 esg_bm <- ecosites %>% 
   filter(ECO.SITE.MATCHED == F) %>% 
-  select(-PERCENT, -ECO.SITE, PLOTID = PLOT.ID) %>% 
+  select(-PERCENT, -ECO.SITE, PLOTID) %>% 
   mutate(ESTIMATE = 'LOWER') %>% 
   full_join(., esg_bm, by = 'PLOTID')
 
-rm(lkp_abb, esg_unverified_plots, esg_cover)
+rm(lkp_abb, esg_unverified_plots)
 ```
 
-```{r reassemble both metrics}
+```{r join ESG data to plots with ESDs which do NOT have reference metrics developed yet}
+
+esg_lkp_tab <- read.csv(file.path(praw, f[grep('ESG-Lookup', f)])) %>% 
+  left_join(., esg_cover ) 
+
+es_wo_d <- ecosites %>%
+  filter(ECO.SITE.MATCHED == T, ESTIMATE == 'UPPER', is.na(PERCENT)) %>% 
+  left_join(., summary, by = 'PLOTID') %>% 
+  select(-PERCENT) %>%  
+  left_join(., esg_lkp_tab) %>% 
+  mutate(Meeting = if_else(TotalFoliarCover >= PERCENT, T, F),
+         .after = BareSoilCover)
+
+table(es_wo_d$Meeting)
+
+
+64/122
+8/22 # 37 % failing, relative to 53 above
+
+
+```
+
+```{r reassemble all plots now with metrics}
 
 esd <- known_ecosites %>% drop_na()
 
