@@ -43,6 +43,7 @@ prop_fail <- function(x){
   toString(paste0('proportion of plots not achieving benchmarks: ', round( meet[1] / sum(meet), 3), 
          ' (n = ',  sum(meet), ')' ))
 }
+mround <- function(x, base){ base*round(x/base) }
 
 ```
 
@@ -176,22 +177,22 @@ We compared the results from three different calculations of benchmarks. The fir
 
 ```{r Does Total Foliar Cover Predict Bare Soil ?}
  
-hist(known_ecosites$BareSoilCover)
-summary(bg_pred_tfc <-  lm(BareSoilCover ~ TotalFoliarCover, data = known_ecosites) )
-     
-par(mfrow  = c(2,2))
-plot(bg_pred_tfc )
-dev.off()
+summary(bg_pred_tfc <-  lm(BareSoilCover ~ TotalFoliarCover, data = known_ecosites))
+# plot(bg_pred_tfc$residuals) # fine for purposes
+# abline(0,0)
 
-newdat <- data.frame(TotalFoliarCover = 100:0)
+# par(mfrow  = c(2,2))
+# plot(bg_pred_tfc )
+# par(mfrow = c(1,1))
+
+newdat <- data.frame(TotalFoliarCover =  100:0 )
 predicted_vals <- predict(bg_pred_tfc, newdat, tyep = 'response', se.fit = T) 
 newdat = data.frame(
-  TotalFoliarCover = 100:0, 
+  TotalFoliarCover = newdat$TotalFoliarCover, 
   BareSoilCover = predicted_vals$fit, 
   se.low = predicted_vals$fit - predicted_vals$se.fit,
   se.high = predicted_vals$fit + predicted_vals$se.fit
 )
-
 
 par(pty="s")
 plot( x = known_ecosites$TotalFoliarCover, y = known_ecosites$BareSoilCover,
@@ -204,6 +205,9 @@ lines(y = newdat$se.low, x = newdat$TotalFoliarCover,  col = 'red', lwd = 2, lty
 axis(1)
 axis(2, las = 1)
 
+#newdat <- filter(newdat, BareSoilCover > 0)
+
+rm(predicted_vals, bg_pred_tfc)
 ```
 
 
@@ -213,11 +217,42 @@ esd <- known_ecosites %>% drop_na()
 
 esg <- esg_bm %>% 
   left_join(., summary, by = 'PLOTID') %>% 
-  mutate(Meeting = if_else(TotalFoliarCover >= PERCENT  - 5, T, F),
+  mutate(Meeting = if_else(TotalFoliarCover >= PERCENT, T, F),
          .after = BareSoilCover) %>% 
   st_as_sf()
 
 esg_bm2 <- bind_rows(es_wo_d, esg)
+
+```
+
+
+```{r compare imputed benchmarks to raw benchmarks}
+
+newdat <- newdat %>%
+  select(TotalFoliarCover, BareSoilCover) %>% 
+  mutate(BareSoilCover = if_else(BareSoilCover < 5, 5, BareSoilCover)) %>% 
+  rename(Imputed_Target = BareSoilCover) %>% 
+  mutate(Imputed_Target = mround(Imputed_Target, base= 5))
+
+t <- esg_bm2 %>% 
+  mutate(TotalFoliarCover = round(TotalFoliarCover, 0)) %>% 
+  left_join(., newdat, by = 'TotalFoliarCover') %>% 
+  mutate(Meeting2 = if_else(BareSoilCover <= Imputed_Target, T, F),
+         .after = BareSoilCover) 
+  
+
+
+table(t$Meeting)
+table(t$Meeting2)
+
+33/72 # 45.8 fail
+26/72 # 40 # fail
+
+
+```
+
+
+```{r}
 
 plots_w_bm <- bind_rows(esd, esg_bm2) %>% st_as_sf() %>% 
   drop_na()
