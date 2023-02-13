@@ -16,7 +16,7 @@ link-citations: yes
 
 \vspace{-1cm}
 
-A decrease in the total amount of vegetation, the litter associated with dead portions which fall away from it, and soil crusts, leads to an increase in bare ground. Bare ground, constitutes the top layer of all soil which may be exposed to a falling raindrop, and in addition to vegetation does not include rock and gravel. Increases in bare ground increase the susceptibility of soil to erosion, a process which adversely impacts both natural and human modified areas (SECTION X.X). While invasive species tend to drastically alter the biotic context of ecological sites (SECTION X.X), and different plant functional groups (SECTION X.X.) have differing effects on decreasing the potential of soil to erosion (SECTION X.X), the alteration of functional groups and shifting of an ecological site to cover  of noxious species is not a zero sum game for soil retention. Accordingly, here we determine whether an appropriate amount of vegetation, and biocrusts, remain on sites to prevent an increase in the risk of sites to erodibility. 
+A decrease in the total amount of vegetation, the litter associated with dead portions which fall away from it, and soil crusts, leads to an increase in bare ground. Bare ground, constitutes the top layer of all soil which may be exposed to a falling raindrop, and in addition to vegetation does not include rock and gravel. Increases in bare ground increase the susceptibility of soil to erosion, a process which adversely impacts both natural and human modified areas (SECTION X.X). While invasive species tend to drastically alter the biotic context of ecological sites (SECTION X.X), and different plant functional groups (SECTION X.X.) have differing effects on decreasing the potential of soil to erosion (SECTION X.X), the alteration of functional groups and shifting of an ecological site to cover of noxious species is not a zero sum game for soil retention. Accordingly, here we determine whether an appropriate amount of vegetation, and biocrusts, remain on sites to prevent an increase in the risk of sites to erodibility. 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = F)
@@ -105,8 +105,8 @@ summary <- read.csv(file.path(praw, f[grep('TerraDat', f)])) %>%
          PlotID = str_replace(PlotID, 'RIP', 'RI'),
          PlotID = str_replace(PlotID, 'Other', 'OT')) %>% 
   rename(PLOTID = PlotID) %>% 
-  left_join(wghts, ., by = 'PLOTID') 
-  
+  left_join(wghts, ., by = 'PLOTID')  %>% 
+  mutate(AoInference = str_replace(AoInference, '-NM', '-NCA'))
 
 rm(coords,  wghts)
 ```
@@ -159,7 +159,7 @@ esg_bm <- left_join(esg_unverified_plots, esg_cover, by = 'ESG') %>%
 esg_bm <- ecosites %>% 
   filter(ECO.SITE.MATCHED == F) %>% 
   select(-PERCENT, -ECO.SITE, PLOTID) %>% 
-  mutate(ESTIMATE = 'LOWER') %>% 
+  mutate(ESTIMATE = 'UPPER') %>% 
   full_join(., esg_bm, by = 'PLOTID')
 
 rm(lkp_abb, esg_unverified_plots)
@@ -218,7 +218,12 @@ newdat = data.frame(
   se.low = predicted_vals$fit - predicted_vals$se.fit,
   se.high = predicted_vals$fit + predicted_vals$se.fit
 )
+```
 
+```{r Does Total Foliar Cover Predict Bare Soil PLOT, eval = F}
+
+png(height = 480, units = 'px',  filename = '../results/BarePredFoliar.png',
+    bg = 'transparent')
 par(pty="s")
 plot( x = known_ecosites$TotalFoliarCover, y = known_ecosites$BareSoilCover,
      xlab = 'Total Foliar Cover', ylab = 'Bare Soil Cover',  axes = FALSE, 
@@ -229,7 +234,10 @@ lines(y = newdat$se.high, x = newdat$TotalFoliarCover,  col = 'red', lwd = 2, lt
 lines(y = newdat$se.low, x = newdat$TotalFoliarCover,  col = 'red', lwd = 2, lty = 3)
 axis(1)
 axis(2, las = 1)
+dev.off()
+```
 
+```{r}
 rm(predicted_vals, bg_pred_tfc)
 ```
 
@@ -240,9 +248,16 @@ $$ 100 - (\text{foliar cover} + \text{litter} +  \text{rock} + \text{biocrusts})
 We sought to simplify this relationship to:
 
 $$ 100 -  \text{foliar cover} = \text{bare ground} $$
+
+\begin{wrapfigure}{l}{0.3\textwidth}
+  \centering
+    \includegraphics[width=0.3\textwidth]{../results/BarePredFoliar.png}
+  \caption{Relationship between Bare Soil and Foliar Cover}
+\end{wrapfigure}
+
 In order to accomplish this a very simple linear model was created, using the `r ` AIM plots which had both verified Ecological Sites, and which these contained descriptions with cover reference. The linear model used the TerrAdat metric 'TotalFoliarCover' as a predictor of 'BareSoilCover' $\text{lm(BareSoilCover ~ TotalFoliarCover)}$ (in R modelling parlance), *STATS.* The values predicted from this model, for estimates of Total Foliar Cover from 0-100 were then rounded up to the nearest 5, e.g. an estimate of 1% bare ground would be 5%, to reflect variation in reference states, and that a linear model seeks to pass through the central *MOTION* of a cloud of data points.  
 
-We compared the results from three different calculations of benchmarks. The first values utilizing the benchmarks from the Ecological Site Descriptions, resulted in a Field Office wide `r prop_fail(known_ecosites)`, while for plots with matched Ecological Sites, but which lacked a written Description `r prop_fail(es_wo_d)`, and plots which were not mapped to an Ecological Site `r prop_fail(esg)`. Taken together all plots compared with esgs had `r prop_fail(esg_bm2)`
+We compared the results from three different calculations of benchmarks. The first values utilizing the benchmarks from the Ecological Site Descriptions, resulted in a Field Office wide `r prop_fail(known_ecosites)`, while for plots with matched Ecological Sites, but which lacked a written Description `r prop_fail(es_wo_d)`, and plots which were not mapped to an Ecological Site `r prop_fail(esg)`. Taken together all plots compared with esgs had `r prop_fail(esg_bm)`
 
 Based on these data, their was very strong evidence that foliar cover affects bare ground (adj. r^2^ = `r round(s[["adj.r.squared"]], 3)`, p < 000.1), and that we can safely simplify this relationship. 
 
@@ -279,13 +294,18 @@ compare_imputed <- esg_bm %>%
   summarize(across(.cols = everything(), sum, na.rm = T)) %>% 
   mutate(across(.cols = everything(), ~ 1 - (.x/nrow(esg_bm))))
 
-
 ref <- known_ecosites %>% 
   st_drop_geometry() %>% 
   select(Meeting_ESD = Meeting) %>% 
   summarize(across(.cols = everything(), sum, na.rm = T)) %>% 
    mutate(across(.cols = everything(), ~ 1 - (.x/nrow(known_ecosites))))
-  
+
+newdat <- select(newdat, TotalFoliarCover, Imputed_Target_10)
+
+```
+
+```{r plot imputed benchmarks, eval = F}
+
 cbind(compare_imputed, ref) %>% 
   t() %>% 
   data.frame() %>% 
@@ -303,17 +323,27 @@ cbind(compare_imputed, ref) %>%
                             'ESD',  'LM + 10%')) +
   scale_fill_manual(values = c('#D4CB92', '#395C6B', '#BCD3F2')) +
   geom_text(aes(label = round(Percent, 3))) + 
+  theme(legend.position = 'bottom', 
+        plot.title = element_text(hjust = 0.5)) +
 
-  labs(title = 'Comparision of ESG with ESG derived Benchmarks', 
-       x = 'Calculated Value', y = 'Proportion of Plots Meeting Benchmark')
+  labs(title = 'ESD and ESG derived Benchmarks', 
+       x = 'Calculated Value', y = 'Proportion Meeting Benchmark')
 
-newdat <- select(newdat, TotalFoliarCover, Imputed_Target_10)
+ggsave(plot = last_plot(), device = 'png', height = 12, units = 'cm', 
+       path = '../results', filename = 'compare_benchmarks.png')
 ```
 
-We compare four possible benchmark values inferred from the ESG covers. The first was the original value of Total Foliar Cover, using this metric `r paste0(round(compare_imputed[1, 'Meeting_TF'], 3) * 100, '%')` plots were classified as failing to meet benchmarks, a serious discrepancy, `r paste0(round((compare_imputed[1, 'Meeting_TF'] - ref[1,1])  * 100, 1), '%')`, between those plots which had ESD benchmarks to compare themselves to which had only `r paste0(round(ref[1,1], 3) * 100, '%')` plots failing to achieve benchmarks. The linear model was a serious improvement over these results decreasing the discrepancy between the plots with known benchmarks which were failing and the linear model predictions of plots failing, `r paste0(round(compare_imputed[1, 'Meeting_IT'], 3) * 100, '%')`, to 
+
+\begin{wrapfigure}{r}{0.35\textwidth}
+  \centering
+    \includegraphics[width=0.35\textwidth]{../results/compare_benchmarks.png}
+  \caption{Relationship between Bare Soil and Foliar Cover}
+\end{wrapfigure}
+
+We compare four possible benchmark values inferred from the ESG covers. The first was the original value of Total Foliar Cover, using this metric `r paste0(round(compare_imputed[1, 'Meeting_TF'], 3) * 100, '%')` plots were classified as failing to meet benchmarks, a serious discrepancy, `r paste0(round((compare_imputed[1, 'Meeting_TF'] - ref[1,1])  * 100, 1), '%')`, between those plots which had ESD benchmarks to compare themselves to which had only `r paste0(round(ref[1,1], 3) * 100, '%')` plots failing to achieve benchmarks. The linear model was a serious improvement over these results decreasing the discrepancy between the plots with known benchmarks which were failing and the linear model predictions of plots failing, `r paste0(round(compare_imputed[1, 'Meeting_IT'], 3) * 100, '%')`, to a difference of 
 `r paste0(round((compare_imputed[1, 'Meeting_IT'] - ref[1,1])  * 100, 1), '%')`.
 
-Turning the predictions from the linear model into more 'human like' results, by creating intervals within the range via rounding, more akin to how humans report estimates, proved to improve upon the linear model estimates. Both values used for a buffer offset, 5% and 10%, produced results with a similar accuracy to the AIM plots with known benchmarks. When using the buffer of 5% a difference of `r paste0(abs(round(ref[1,1] - compare_imputed[1, 'Meeting_IT_5'], 3) * 100), '%')` was observed, and with 10% a difference of `r paste0(abs(round(ref[1,1] - compare_imputed[1, 'Meeting_IT_10'], 3) * 100), '%')` was also observed. While several prominent information theories, and model evaluation approaches would support the acceptance of the 5% buffer, due to a great number of the plots in the groups under evaluation being in Major Land Resource Area (MLRA) 48. This area is generally very well vegetated, and we expect it to have more land within reference relative to the remainder of the field office. 
+Turning the predictions from the linear model into more 'human like' results, by creating intervals within the range via rounding, more akin to how humans report estimates, proved to improve upon the linear model estimates. Both values used for a buffer offset, 5% and 10%, produced results with a similar accuracy to the AIM plots with known benchmarks. Theoretically, there should be little biological reason for the groups of plots with and without ESD's in the same Major Land Resource Area's to differ extensively, and the known values should provide an accurate estimate of the unknown values. When using the buffer of 5% a difference of `r paste0(abs(round(ref[1,1] - compare_imputed[1, 'Meeting_IT_5'], 3) * 100), '%')` was observed, and with 10% a difference of `r paste0(abs(round(ref[1,1] - compare_imputed[1, 'Meeting_IT_10'], 3) * 100), '%')` was also observed. While several prominent information theories, and model evaluation approaches would support the acceptance of the 5% buffer, due to a number of the plots in the groups under evaluation being in MLRA 48. This area is generally very well vegetated, and we expect it to have more land within reference relative to the remainder of the field office. 
 
 ```{r link all results back together with better benchmarks}
 
@@ -344,14 +374,44 @@ bareground <- spsurvey::cat_analysis(
 
 ```
 
-```{r create figure of cover by ESD}
+```{r create figure of cover by ESD, eval = F}
 
-  ggplot(data = plots_w_bm) +
-  
-  geom_jitter( height = 0.2,
-              aes(x = BareSoilCover, y = fct_reorder(ECO.SITE, PERCENT)), alpha = 0.4) +
-  geom_point(aes(x = PERCENT, y = fct_reorder(ECO.SITE, PERCENT), color  = SET), 
+benchmarks1 <- benchmarks %>% 
+  drop_na() %>% 
+  select(-ESTIMATE) %>% 
+  mutate(SET = 'ESD')
+
+benchmarks2 <- plots_w_bm %>% 
+  filter(SET == 'ESG') %>% 
+  select(ECO.SITE, PERCENT, SET) %>% 
+  st_drop_geometry() %>% 
+  bind_rows(., benchmarks1) %>% 
+  group_by(ECO.SITE) %>% 
+  mutate(PERCENT_mean = mean(PERCENT))
+
+benchmarks3 <- benchmarks2 %>% 
+  mutate(ECO.SITE = str_replace(ECO.SITE, 'SAW-Sandy_Uplands_and_Loamy_Uplands', 
+                                'SAW_Sandy_&_Loamy'),
+         ECO.SITE = str_replace(ECO.SITE, 'AW-Sandy_and_Loamy_Uplands', 
+                                'AW_Sandy_&_Loamy'),
+         ECO.SITE = str_replace(ECO.SITE, 'SAW-Shallow_and_Deep_Rocky', 
+                                'SAW_Shallow_&_Rocky'), 
+         ECO.SITE = str_replace(ECO.SITE, 'AW-Shallow',   'AW-Very_Shallow'))
+
+plots_w_bm <- plots_w_bm %>% 
+  mutate(ECO.SITE = str_replace(ECO.SITE, 'SAW-Sandy_Uplands_and_Loamy_Uplands', 
+                                'SAW_Sandy_&_Loamy'),
+         ECO.SITE = str_replace(ECO.SITE, 'AW-Sandy_and_Loamy_Uplands', 
+                                'AW_Sandy_&_Loamy'),
+         ECO.SITE = str_replace(ECO.SITE, 'SAW-Shallow_and_Deep_Rocky', 
+                                'SAW_Shallow_&_Rocky'), 
+         ECO.SITE = str_replace(ECO.SITE, 'AW-Shallow',   'AW-Very_Shallow'))
+
+ggplot() +
+    geom_point(data = benchmarks3, aes(x = PERCENT, y = fct_reorder(ECO.SITE, PERCENT_mean), color  = SET), 
             shape = 18, alpha = 0.8, size = 3) + #benchmarks here
+    geom_jitter(data = plots_w_bm,  height = 0.2,
+              aes(x = BareSoilCover, y = fct_reorder(ECO.SITE, PERCENT)), alpha = 0.4) +
 
   theme_bw() + # AIM data are here
   
@@ -359,28 +419,25 @@ bareground <- spsurvey::cat_analysis(
                      values = c("ESD" = '#66A182', "ESG" = "#C0D461")) +
   theme(plot.title = element_text(hjust = 0.5),
         panel.grid.major.y =  element_blank(),
-        axis.text.y = element_text(size = 7, angle = 45), 
+        axis.text.y = element_text(size = 6, angle = 45), 
         aspect.ratio = 16/9,
         legend.position = 'bottom') +
   labs(title = 'Bareground',
        y = NULL, x = 'Percent') +
-  scale_x_continuous(NULL, breaks = seq(from = 0, to = 60, by = 10), 
-                     labels = paste0(seq(from = 0, to = 60, by = 10), '%'), 
-                     limits = c(0,60))
-ggsave(plot = last_plot(), device = 'png', height = 21, units = 'cm', 
-       path = '../results', filename = 'bareground_benchmarks.png')
+  scale_x_continuous(NULL, breaks = seq(from = 0, to = 100, by = 10), 
+                     labels = paste0(seq(from = 0, to = 100, by = 10), '%'), 
+                     limits = c(0,100))
 
+ggsave(plot = last_plot(), device = 'png', height = 21, units = 'cm', 
+       path = '../results', filename = 'bareground_benchmark.png')
+
+rm(benchmarks1, benchmarks2, benchmarks3)
 ```
 
-```{r figure of cover by administrative area}
+```{r figure of cover by administrative area, eval = F}
 
-noxious_presence_analysis <- noxious_presence_analysis %>% 
-  mutate(Method = 'SR_Presence')
-waff_dat <- noxious_cover_analysis %>% 
-  mutate(Method = 'LPI_Presence') %>% 
-  bind_rows(noxious_presence_analysis, .) %>% 
-  filter(Category == T) 
-waff_dat <- waff_dat %>% 
+waff_dat_cover <- bareground %>% 
+  filter(Category == T) %>% 
   mutate(
     across(where(is.numeric), ~ round(.x, 0)),
     Low = if_else(LCB80Pct.P == 0, 0, LCB80Pct.P - 1),
@@ -392,23 +449,24 @@ waff_dat <- waff_dat %>%
   rowwise(Subpopulation) %>% 
   mutate(High = if_else(sum(c_across(Low:High)) > 100, High -1, High),
          High = if_else(sum(c_across(Low:High)) < 100, High + 1, High))  %>% 
-  select(Subpopulation, Method,  Low:High) %>% 
+  select(Subpopulation, Low:High) %>% 
   pivot_longer(cols = Low:High, names_to = 'Statistic', values_to = 'Value') %>% 
   group_by(Subpopulation) %>% 
   mutate(
-    Method = factor(Method, levels = c('SR_Presence', 'LPI_Presence')),
     Statistic = factor(Statistic,
                        levels = c('Low', 'CI_Low', 'Estimate', 'CI_High', 'High')), 
     Subpopulation = factor(Subpopulation,
-                       levels = c('ACEC-WSA', 'DE-NM', 'GG-NM', 'SampleFrame')))
-waff_dat <- data.table::setorder(waff_dat, Statistic)
+                       levels = c('ACEC-WSA', 'DE-NCA', 'GG-NCA', 'SampleFrame')))
+
+
+waff_dat <- data.table::setorder(waff_dat_cover, Statistic)
 waf_values = c('Low' = '#1FE032', 'High' = '#E0321F', 'CI_Low' = '#808929', 
                'Estimate' = 'black', 'CI_High' = '#808929')
-meth_labs = setNames(c("Richness", "LPI"), c('SR_Presence', "LPI_Presence"))
-w <- ggplot(waff_dat, aes(fill = Statistic, values = Value)) +
+
+
+w <- ggplot(waff_dat_cover, aes(fill = Statistic, values = Value)) +
   geom_waffle(color = "white", size = .25, flip = TRUE) +
-  facet_wrap( ~ Subpopulation, 
-             labeller = labeller(Method = meth_labs)) +
+  facet_wrap( ~ Subpopulation) +
   scale_fill_manual('Condition', values = waf_values, 
                     labels = c('Meeting', 'Conf. Int.', "Estimate", 'Conf. Int.', 'Failing')) +
   scale_x_discrete()  +
@@ -419,15 +477,16 @@ w <- ggplot(waff_dat, aes(fill = Statistic, values = Value)) +
     aspect.ratio = 1,
     axis.text.y = element_text(color = "grey20", size = 6, angle = 45),
     axis.title.y = element_text(size = 9),
-    legend.key.size = unit(0.3, 'lines'),
-    legend.text = element_text(size = 6),
-    legend.title = element_text(hjust = 0.5, size = 8), 
+    legend.key.size = unit(0.8, 'lines'),
+    legend.text = element_text(size = 10),
+    legend.title = element_text(hjust = 0.5, size = 12), 
     plot.title = element_text(hjust = 0.5, size = 10, face = 'bold'),
     panel.spacing = unit(0.4, "lines"), 
     strip.background =element_rect(fill="white"), 
     panel.background = element_blank()) +
   guides(fill=guide_legend(ncol=2))
-ggsave(w, path = '../results/figures', device = 'png', bg = 'transparent',
+
+ggsave(w, path = '../results', device = 'png', bg = 'transparent',
        filename = 'waffles.png', dpi = 300, height = 4, units = "in")
 ```
 
@@ -437,14 +496,81 @@ cd ../results/benchmarks
 mogrify -trim *.png
 ```
 
+\newpage 
+
 # Results
 
-The percent bare ground is relatively ... 
 
 \begin{wrapfigure}{l}{0.5\textwidth}
   \centering
     \includegraphics[width=0.5\textwidth]{../results/bareground_benchmark.png}
-  \caption{Benchmarks and Observed Values}
+  \caption{Benchmarks and Observed Values, all points to the right of the highest diamond are failing to achieve standards}
 \end{wrapfigure}
+
+Visual evidence suggests certain Ecological Sites were found to be outside of reference more often than others and may warrant concern (Figure 3). 
+'Semidesert Loam', 'Semidesert Sandy Loam' (R036XY325CO, R036XY326CO). Both of these sites are generally, coarse soiled, lower elevation Wyoming Sage Brush sites and tend to have depauperate forb and graminoid components of their functional diversity. The site 'Loamy Foothills' (R036XY284), is similar to the above in all regards, except in having generally finer textured soils. Accordingly the loss of these functional components may be associated with this apparent trend.  On the other hand, the ecological sites 'Semidesert Stony Loam', 'Clayey Foothills', 'Semidesert Juniper Loam', and 'Mountain Pinyon', (respectively: R034BY404CO, R036XY289CO, R036XY113CO, R036XY114CO) tend to have less bare ground that would be expected under reference conditions. For the first three this may relate to soil loss and concomitant increases in the exposure of rock fragments, and invasive species, or indicate they are overgrown. For the last two this may indicate very dense cover of trees, perhaps due to lack of thinning of early succession sites. Further investigation of the relationships between ecological sites and the total cover benchmarks are warranted at the end of the second AIM sample design. 
+
+
+```{r}
+
+bg <- bareground %>% 
+  filter(Category == T)
+  
+gg_meet <- toString(
+  paste0(
+    round(bg[bg$Subpopulation == 'GG-NCA', 'LCB80Pct.P'], 1), '- ', 
+    round(bg[bg$Subpopulation == 'GG-NCA', 'Estimate.P'], 1), '% -',  
+    round(bg[bg$Subpopulation == 'GG-NCA', 'UCB80Pct.P'], 1) ) )
+
+sf_meet <- toString(
+  paste0(
+    round(bg[bg$Subpopulation == 'SampleFrame', 'LCB80Pct.P'], 1), '- ', 
+    round(bg[bg$Subpopulation == 'SampleFrame', 'Estimate.P'], 1), '% -',  
+    round(bg[bg$Subpopulation == 'SampleFrame', 'UCB80Pct.P'], 1) ) )
+
+de_meet <- toString(
+  paste0(
+    round(bg[bg$Subpopulation == 'DE-NCA', 'LCB80Pct.P'], 1), '- ', 
+    round(bg[bg$Subpopulation == 'DE-NCA', 'Estimate.P'], 1), '% -',  
+    round(bg[bg$Subpopulation == 'DE-NCA', 'UCB80Pct.P'], 1) ) )
+
+acec_meet <- toString(
+  paste0(
+    round(bg[bg$Subpopulation == 'ACEC-WSA', 'LCB80Pct.P'], 1), '- ', 
+    round(bg[bg$Subpopulation == 'ACEC-WSA', 'Estimate.P'], 1), '% -',  
+    round(bg[bg$Subpopulation == 'ACEC-WSA', 'UCB80Pct.P'], 1) ) )
+
+rm(bareground, benchmarks)
+```
+
+
+No administrative area had an estimated percent of land meeting the management objectives. However, two areas, the Gunnison Gorge National Conservation Area, and the office at large had estimates of uncertainty around the estimate of land meeting benchmarks which included the management objectives. The confidence intervals for the Gunnison Gorge lands overlapped notably with the objectives, `r gg_meet`, however this may be in part due to relatively few plots (n = `r bg[bg$Subpopulation == 'GG-NCA', 'nResp']`) which were sampled in the area, and with a narrowing confidence band these results may not be consistent. The field office at large, while barely overlapping (`r sf_meet`) with the percent of land meeting objectives, has a much larger sample size (n = `r bg[bg$Subpopulation == 'SampleFrame', 'nResp']`), indicating these results are more stable. However, we should consider that we took a more lenient perspective on imputing our benchmarks, and should not take this for granted. 
+
+Estimates of the percent of land meeting management objectives for both the ACEC-WSA's and Dominguez-Escalente National Conservation Area include estimates of uncertainty which include the lower 70% objective for *non-special status* Uncompahgre Field Office lands. Dominguez-Escalente has a respectable sample size (n = `r bg[bg$Subpopulation == 'DE-NCA', 'nResp']`), relative to the other special status areas, indicating that it's estimate (`r de_meet`) is unlikely to retract much with considerable sampling. Whereas the estimate for the ACEC-WSA is broad, largely in part due to a small sample (n = ), and the confidence intervals would be expected to contract significantly (`r acec_meet`), towards the relatively low estimate.  
+
+\begin{wrapfigure}{l}{0.5\textwidth}
+  \centering
+    \includegraphics[width=0.5\textwidth]{../results/waffles.png}
+  \caption{Percent land meeting reference benchmark conditions}
+\end{wrapfigure}
+
+
+```{r write out results to csv}
+
+plots_w_bm %>% 
+  st_drop_geometry() %>% 
+  mutate(CATEGORY = NA) %>% 
+  select(PLOTID, AoInference, Meeting, CATEGORY, ECO.SITE) %>% 
+  mutate(INDICATOR = 'INVASIVE SPECIES', .before = CATEGORY) %>% 
+  rename_with(toupper) %>% 
+  mutate(across(.cols = everything(), toupper)) %>% 
+  write.csv(., row.names = F, 
+          '../data/processed/bareground_meeting_benchmarks.csv')
+
+```
+
+```{r clear the environment}
+rm(plots_w_bm, sf_meet, gg_meet, bg, f, praw, acec_meet, de_meet, prop_fail)
+```
 
 # References
