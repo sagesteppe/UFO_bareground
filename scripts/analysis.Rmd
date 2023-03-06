@@ -16,7 +16,7 @@ link-citations: yes
 
 \vspace{-1cm}
 
-A decrease in the total amount of vegetation, the litter associated with dead portions which fall away from it, and soil crusts, leads to an increase in bare ground. Bare ground, constitutes the top layer of all soil which may be exposed to a falling raindrop, and in addition to vegetation does not include rock and gravel. Increases in bare ground increase the susceptibility of soil to erosion, a process which adversely impacts both natural and human modified areas (SECTION X.X). While invasive species tend to drastically alter the biotic context of ecological sites (SECTION X.X), and different plant functional groups (SECTION X.X.) have differing effects on decreasing the potential of soil to erosion (SECTION X.X), the alteration of functional groups and shifting of an ecological site to cover of noxious species is not a zero sum game for soil retention. Accordingly, here we determine whether an appropriate amount of vegetation, and biocrusts, remain on sites to prevent an increase in the risk of sites to erodibility. 
+A decrease in the total amount of vegetation, the litter associated with dead portions which fall away from living plants, and soil crusts, contribute to an increase in bare ground. Bare ground, constitutes the top layer of all soil which may be exposed to a falling raindrop, and in addition to vegetation does not include rock and gravel. Increases in bare ground increase the susceptibility of soil to erosional forces from both wind and water. Erosion is a process which adversely impacts both natural and human modified areas (SECTION X.X). While invasive species tend to drastically alter the biotic context of ecological sites (SECTION X.X), and different plant functional groups (SECTION X.X.) have differing effects on decreasing the potential of soil to erosion (SECTION X.X), the alteration of functional groups and shifting of an ecological site to cover of noxious and invasives species is not a zero sum game for soil retention. Accordingly, here we determine whether an appropriate amount of vegetation, and biocrusts, remain on sites to prevent an increase in the risk of sites to erodibility. 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = F)
@@ -28,7 +28,7 @@ knitr::opts_chunk$set(fig.align="left")
 
 # Methods
 
-TerrAdat summary data were downloaded from the ArcMap SDE (Spatial Database Engine) service layer on February 9th 2023, and imported into R. The references for bare ground cover come exclusively from the 'Reference Sheet' portion as Ecological Site Descriptions as these values were noted to differ from vegetation estimates in a few of the functional cover estimates. These estimates were available for XX of all the XX sites which had plots verified to them,  XX of XX  total plots had a reference benchmark.  
+TerrAdat summary data were downloaded from the ArcMap SDE (Spatial Database Engine) service layer on February 9th 2023, and imported into R. The references for bare ground cover come exclusively from the 'Reference Sheet' portion as Ecological Site Descriptions as these values were noted to differ from vegetation estimates in a few of the functional cover estimates. These estimates were available for XX of all the XX sites which had plots correlated to them,  XX of XX  total plots had a reference benchmark.  
 
 ```{r}
 library(tidyverse)
@@ -203,6 +203,7 @@ rm(summary)
 s <- summary(
   bg_pred_tfc <-  lm(BareSoilCover ~ TotalFoliarCover, data = known_ecosites)
   )
+
 # plot(bg_pred_tfc$residuals) # fine for purposes
 # abline(0,0)
 
@@ -210,7 +211,7 @@ s <- summary(
 # plot(bg_pred_tfc )
 # par(mfrow = c(1,1))
 
-newdat <- data.frame(TotalFoliarCover =  100:0 )
+newdat <- data.frame(TotalFoliarCover = 100:0)
 predicted_vals <- predict(bg_pred_tfc, newdat, tyep = 'response', se.fit = T) 
 newdat = data.frame(
   TotalFoliarCover = newdat$TotalFoliarCover, 
@@ -226,7 +227,7 @@ png(height = 480, units = 'px',  filename = '../results/BarePredFoliar.png',
     bg = 'transparent')
 par(pty="s")
 plot( x = known_ecosites$TotalFoliarCover, y = known_ecosites$BareSoilCover,
-     xlab = 'Total Foliar Cover', ylab = 'Bare Soil Cover',  axes = FALSE, 
+     xlab = 'Foliar Cover', ylab = 'Bareground',  axes = FALSE, 
      main = 'Predicting Bareground from Foliar Cover',
      xlim = c(0,100), ylim = c(0,100), col = rgb(red = 0, green = 0, blue = 0, alpha = 0.3))
 lines(x = newdat$TotalFoliarCover, y = newdat$BareSoilCover,  lwd = 2) 
@@ -255,11 +256,10 @@ $$ 100 -  \text{foliar cover} = \text{bare ground} $$
   \caption{Relationship between Bare Soil and Foliar Cover}
 \end{wrapfigure}
 
-In order to accomplish this a very simple linear model was created, using the `r ` AIM plots which had both verified Ecological Sites, and which these contained descriptions with cover reference. The linear model used the TerrAdat metric 'TotalFoliarCover' as a predictor of 'BareSoilCover' $\text{lm(BareSoilCover ~ TotalFoliarCover)}$ (in R modelling parlance), *STATS.* The values predicted from this model, for estimates of Total Foliar Cover from 0-100 were then rounded up to the nearest 5, e.g. an estimate of 1% bare ground would be 5%, to reflect variation in reference states, and that a linear model seeks to pass through the central *MOTION* of a cloud of data points.  
+To accomplish this a very simple linear model was created, using the `r nrow(known_ecosites)` AIM plots which had both verified Ecological Sites, and contained descriptions with cover reference (Figure 1). The linear model used the Total Foliar Cover as a predictor of Bare Ground $\text{lm(BareSoilCover ~ TotalFoliarCover)}$ (R modelling parlance). The values predicted from this model, for estimates of Total Foliar Cover from 0-100 were then rounded up to the nearest 5, e.g. an estimate of 1% bare ground would become 5%, to reflect variation in reference states.
 
-We compared the results from three different calculations of benchmarks. The first values utilizing the benchmarks from the Ecological Site Descriptions, resulted in a Field Office wide `r prop_fail(known_ecosites)`, while for plots with matched Ecological Sites, but which lacked a written Description `r prop_fail(es_wo_d)`, and plots which were not mapped to an Ecological Site `r prop_fail(esg)`. Taken together all plots compared with esgs had `r prop_fail(esg_bm)`
+Based on these data, there was very strong evidence that foliar cover affects bare ground, and serves as a moderately informative predictor of it (adj. r^2^ = `r round(s[["adj.r.squared"]], 3)`, p < 000.1), and that we can safely simplify this relationship. 
 
-Based on these data, their was very strong evidence that foliar cover affects bare ground (adj. r^2^ = `r round(s[["adj.r.squared"]], 3)`, p < 000.1), and that we can safely simplify this relationship. 
 
 ```{r compare imputed benchmarks to raw benchmarks}
 
@@ -327,7 +327,7 @@ cbind(compare_imputed, ref) %>%
         plot.title = element_text(hjust = 0.5)) +
 
   labs(title = 'ESD and ESG derived Benchmarks', 
-       x = 'Calculated Value', y = 'Proportion Meeting Benchmark')
+       x = 'Calculated Value', y = 'Proportion Not Meeting Benchmark')
 
 ggsave(plot = last_plot(), device = 'png', height = 12, units = 'cm', 
        path = '../results', filename = 'compare_benchmarks.png')
@@ -340,10 +340,11 @@ ggsave(plot = last_plot(), device = 'png', height = 12, units = 'cm',
   \caption{Relationship between Bare Soil and Foliar Cover}
 \end{wrapfigure}
 
-We compare four possible benchmark values inferred from the ESG covers. The first was the original value of Total Foliar Cover, using this metric `r paste0(round(compare_imputed[1, 'Meeting_TF'], 3) * 100, '%')` plots were classified as failing to meet benchmarks, a serious discrepancy, `r paste0(round((compare_imputed[1, 'Meeting_TF'] - ref[1,1])  * 100, 1), '%')`, between those plots which had ESD benchmarks to compare themselves to which had only `r paste0(round(ref[1,1], 3) * 100, '%')` plots failing to achieve benchmarks. The linear model was a serious improvement over these results decreasing the discrepancy between the plots with known benchmarks which were failing and the linear model predictions of plots failing, `r paste0(round(compare_imputed[1, 'Meeting_IT'], 3) * 100, '%')`, to a difference of 
-`r paste0(round((compare_imputed[1, 'Meeting_IT'] - ref[1,1])  * 100, 1), '%')`.
+We compare four possible benchmark values inferred from the ESG covers using the `r nrow(esg_bm)`, to the true ESD values calculated with the other `r nrow(known_ecosites)` (Figure 2; with the latter group in beige). The first was the original value of Total Foliar Cover, using this metric `r paste0(round(compare_imputed[1, 'Meeting_TF'], 3) * 100, '%')` plots were classified as failing to meet benchmarks, a serious discrepancy, `r paste0(round((compare_imputed[1, 'Meeting_TF'] - ref[1,1])  * 100, 1), '%')`, between those plots which had ESD benchmarks to compare themselves to which had only `r paste0(round(ref[1,1], 3) * 100, '%')` plots failing to achieve benchmarks. This indicated that using the plots total foliar cover value would be an inappropriate proxy, and that imputed values may be more promising. The imputed values derived from linear models were a serious improvement over the last comparisons, results decreasing the discrepancy between the plots with known benchmarks which were failing and the linear model predictions of plots failing, `r paste0(round(compare_imputed[1, 'Meeting_IT'], 3) * 100, '%')`, to a difference of `r paste0(round((compare_imputed[1, 'Meeting_IT'] - ref[1,1])  * 100, 1), '%')`.
 
-Turning the predictions from the linear model into more 'human like' results, by creating intervals within the range via rounding, more akin to how humans report estimates, proved to improve upon the linear model estimates. Both values used for a buffer offset, 5% and 10%, produced results with a similar accuracy to the AIM plots with known benchmarks. Theoretically, there should be little biological reason for the groups of plots with and without ESD's in the same Major Land Resource Area's to differ extensively, and the known values should provide an accurate estimate of the unknown values. When using the buffer of 5% a difference of `r paste0(abs(round(ref[1,1] - compare_imputed[1, 'Meeting_IT_5'], 3) * 100), '%')` was observed, and with 10% a difference of `r paste0(abs(round(ref[1,1] - compare_imputed[1, 'Meeting_IT_10'], 3) * 100), '%')` was also observed. While several prominent information theories, and model evaluation approaches would support the acceptance of the 5% buffer, due to a number of the plots in the groups under evaluation being in MLRA 48. This area is generally very well vegetated, and we expect it to have more land within reference relative to the remainder of the field office. 
+Turning the predictions from the linear model into results more reflective of natural variation, by creating intervals within the range via rounding, more akin to modal concepts to report estimates, improved upon the linear model estimates. Both values used for a range, 5% and 10%, produced results with a similar accuracy to the AIM plots with known benchmarks. Theoretically, there should be little biological reason for the groups of plots with and without ESD's in the same Major Land Resource Area's to differ extensively, and the known values should provide an accurate estimate of the unknown values. When using the buffer of 5% a difference of `r paste0(abs(round(ref[1,1] - compare_imputed[1, 'Meeting_IT_5'], 3) * 100), '%')` was observed, and with 10% a difference of `r paste0(abs(round(ref[1,1] - compare_imputed[1, 'Meeting_IT_10'], 3) * 100), '%')` was also observed. While several statistical frameworks would dictate the acceptance of the 5% buffer, we opted to use the 10% buffer. Because a sizable number of the plots in the groups under evaluation were in MLRA 48, which is generally well vegetated, and we expect it to have more land within bare ground reference conditions relative to the remainder of the field office. The 10% buffer has the same accuracy as the 5% buffer, but results in more plots achieving benchmark conditions. 
+
+The 10% buffer was selected as the final benchmark standard for only the `r nrow(esg_bm)` plots which did not have Ecological Site Descriptions. The calculation of the proportion of lands meeting or failing to achieve benchmarks was carried out using 'cat_analysis' from the 'spsurvey' package.
 
 ```{r link all results back together with better benchmarks}
 
@@ -500,21 +501,22 @@ mogrify -trim *.png
 
 # Results
 
-
 \begin{wrapfigure}{l}{0.5\textwidth}
   \centering
     \includegraphics[width=0.5\textwidth]{../results/bareground_benchmark.png}
   \caption{Benchmarks and Observed Values, all points to the right of the highest diamond are failing to achieve standards}
 \end{wrapfigure}
 
-Visual evidence suggests certain Ecological Sites were found to be outside of reference more often than others and may warrant concern (Figure 3). 
-'Semidesert Loam', 'Semidesert Sandy Loam' (R036XY325CO, R036XY326CO). Both of these sites are generally, coarse soiled, lower elevation Wyoming Sage Brush sites and tend to have depauperate forb and graminoid components of their functional diversity. The site 'Loamy Foothills' (R036XY284), is similar to the above in all regards, except in having generally finer textured soils. Accordingly the loss of these functional components may be associated with this apparent trend.  On the other hand, the ecological sites 'Semidesert Stony Loam', 'Clayey Foothills', 'Semidesert Juniper Loam', and 'Mountain Pinyon', (respectively: R034BY404CO, R036XY289CO, R036XY113CO, R036XY114CO) tend to have less bare ground that would be expected under reference conditions. For the first three this may relate to soil loss and concomitant increases in the exposure of rock fragments, and invasive species, or indicate they are overgrown. For the last two this may indicate very dense cover of trees, perhaps due to lack of thinning of early succession sites. Further investigation of the relationships between ecological sites and the total cover benchmarks are warranted at the end of the second AIM sample design. 
+Visual evidence suggests certain Ecological Sites were found to be outside of reference more often than others and may warrant concern (Figure 3). 'Semidesert Loam', 'Semidesert Sandy Loam' (R036XY325CO, R036XY326CO). Both of these sites are generally, coarse soiled, lower elevation Wyoming Sage Brush sites and tend to have wanting forb and graminoid components of their functional diversity. The site 'Loamy Foothills' (R036XY284), is similar to the above in all regards, except in having generally finer textured soils. Accordingly the loss of these functional components may be associated with this elevational trend  On the other hand, the ecological sites 'Semidesert Stony Loam', 'Clayey Foothills', 'Semidesert Juniper Loam', and 'Mountain Pinyon', (respectively: R034BY404CO, R036XY289CO, R036XY113CO, R036XY114CO) tend to have less bare ground than would be expected under reference conditions. For the first three this may relate to soil loss and concomitant increases in the exposure of rock fragments, and invasive species, or indicate they are overgrown. For the last two this may indicate very dense cover of trees, perhaps due to lack of thinning of early succession sites. Further investigation of the relationships between ecological sites and the total cover benchmarks are warranted at the end of the second AIM sample design. 
 
 
 ```{r}
 
 bg <- bareground %>% 
   filter(Category == T)
+
+samples <- bareground %>% 
+  filter(Category == 'Total')
   
 gg_meet <- toString(
   paste0(
@@ -544,9 +546,9 @@ rm(bareground, benchmarks)
 ```
 
 
-No administrative area had an estimated percent of land meeting the management objectives. However, two areas, the Gunnison Gorge National Conservation Area, and the office at large had estimates of uncertainty around the estimate of land meeting benchmarks which included the management objectives. The confidence intervals for the Gunnison Gorge lands overlapped notably with the objectives, `r gg_meet`, however this may be in part due to relatively few plots (n = `r bg[bg$Subpopulation == 'GG-NCA', 'nResp']`) which were sampled in the area, and with a narrowing confidence band these results may not be consistent. The field office at large, while barely overlapping (`r sf_meet`) with the percent of land meeting objectives, has a much larger sample size (n = `r bg[bg$Subpopulation == 'SampleFrame', 'nResp']`), indicating these results are more stable. However, we should consider that we took a more lenient perspective on imputing our benchmarks, and should not take this for granted. 
+No administrative area had an estimated percent of land meeting the management objectives for bare ground. However, two areas, the Gunnison Gorge National Conservation Area, and the BLM land in the UFO, had estimates of uncertainty around the estimate of land meeting benchmarks which included the management objectives. The confidence intervals for the Gunnison Gorge lands overlapped notably with the objectives, `r gg_meet`, however this may be in part due to relatively few plots (n = `r samples[samples$Subpopulation == 'GG-NCA', 'nResp']`) which were sampled in the area, and with a narrowing confidence band these results may not be consistent. The field office at large, while barely overlapping (`r sf_meet`) with the percent of land meeting objectives, has a much larger sample size (n = `r samples[samples$Subpopulation == 'SampleFrame', 'nResp']`), indicating these results are more stable. However, we should consider that we took a the slightly more lenient estimate on imputing our bageround benchmark, i.e. the 10% estimate, and that the confidence interval for the 5% interval may not overlap. 
 
-Estimates of the percent of land meeting management objectives for both the ACEC-WSA's and Dominguez-Escalente National Conservation Area include estimates of uncertainty which include the lower 70% objective for *non-special status* Uncompahgre Field Office lands. Dominguez-Escalente has a respectable sample size (n = `r bg[bg$Subpopulation == 'DE-NCA', 'nResp']`), relative to the other special status areas, indicating that it's estimate (`r de_meet`) is unlikely to retract much with considerable sampling. Whereas the estimate for the ACEC-WSA is broad, largely in part due to a small sample (n = ), and the confidence intervals would be expected to contract significantly (`r acec_meet`), towards the relatively low estimate.  
+Estimates of the percent of land meeting management objectives for both the ACEC-WSA's and Dominguez-Escalente National Conservation Area include estimates of uncertainty which include the lower 70% objective for *non-special status* Uncompahgre Field Office lands. Dominguez-Escalente has a respectable sample size (n = `r samples[samples$Subpopulation == 'DE-NCA', 'nResp']`), relative to the other special status areas, indicating that it's estimate (`r de_meet`) is unlikely to retract much with considerable sampling. Whereas the estimate for the ACEC-WSA is broad, largely in part due to a small sample (n = ), and the confidence intervals would be expected to contract significantly (`r acec_meet`), towards the relatively low estimate.  
 
 \begin{wrapfigure}{l}{0.5\textwidth}
   \centering
@@ -573,4 +575,3 @@ plots_w_bm %>%
 rm(plots_w_bm, sf_meet, gg_meet, bg, f, praw, acec_meet, de_meet, prop_fail)
 ```
 
-# References
