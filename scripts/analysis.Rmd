@@ -1,5 +1,7 @@
 ---
 title: "Bare ground"
+knit: (function(inputFile, encoding) 
+  { rmarkdown::render(inputFile, encoding = encoding, output_file = file.path(dirname(inputFile), 'Section_8.pdf')) })
 output:
   pdf_document: default
   word_document: default
@@ -15,6 +17,7 @@ link-citations: yes
 ---
 \pagenumbering{gobble}
 \vspace{-1cm}
+
 
 Bare ground, constitutes the top layer of all soil which may be exposed to a falling raindrop, and in addition to vegetation does not include rock and gravel (@edwards2019climate). A decrease in the total amount of vegetation, the litter which falls away plants, and soil crusts, contribute to an increase in bare ground (@edwards2019climate). Increases in bare ground increase the susceptibility of soil to erosional forces from both wind and water. Erosion is a process which adversely impacts both natural and human modified areas (Section 9, @nouwakpo2016review). While invasive species tend to drastically alter the biotic context of ecological sites (Section 10), and different plant functional groups (Section 11) have differing effects on decreasing the potential of soil to erosion, the alteration of functional groups and shifting of an ecological site to cover of noxious and invasive species is not a zero sum game for soil retention. In other words non-native species can make contributions to protecting soil from erosion. Accordingly, here we determine whether an appropriate amount of vegetation, and biocrusts, remain on sites to prevent an increase in the risk of sites to erodibility. 
 
